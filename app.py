@@ -1,4 +1,4 @@
-from flask import Flask, request, abort, render_template, redirect
+from flask import Flask, request, abort, render_template_string, redirect
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
 import datetime
@@ -8,11 +8,13 @@ import random
 try:
     # py3
     from urllib.parse import urljoin
-except ModuleNotFoundError:
+except ImportError:
     # py2
     from urlparse import urljoin
 
 app = Flask(__name__)
+app.config['ENABLE_SUBDOMAINS'] = True
+app.config['BASE_HOSTNAME'] = 'localhost:5000'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 
 db = SQLAlchemy(app)
@@ -37,15 +39,6 @@ class Link(db.Model):
     creator_ip = db.Column(db.String(64), nullable=False)
 
 # Routes
-@app.route('/')
-def usage():
-    return render_template_string("""
-Usage: {{ request.host }}/new/{id_type}/{url}
-
-id_type is one of rand|random, readable, or a static id.
-url is the target url.
-""")
-
 @app.route('/new/<id_type>/<path:target_url>')
 def new_link(id_type, target_url):
     id_type = id_type.lower()
@@ -77,6 +70,19 @@ def get_link(link_id):
     r = redirect(l.target)
     r.headers['Referrer-Policy'] = 'no-referrer'
     return r
+
+@app.route('/')
+def usage():
+    if app.config.get('ENABLE_SUBDOMAINS') and request.host.endswith(app.config['BASE_HOSTNAME']):
+        link_id = request.host[:-len(app.config['BASE_HOSTNAME'])].rstrip('.')
+        if len(link_id) > 0:
+            return get_link(link_id)
+
+    return render_template_string("""Usage: {{ request.host }}/new/{id_type}/{url}
+
+id_type is one of rand|random, readable, or a static id.
+url is the target url.
+""")
 
 if __name__ == "__main__":
     db.create_all()
