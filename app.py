@@ -65,13 +65,11 @@ def new_link(id_type, target_url):
         try:
             db.session.add(l)
             db.session.commit()
-            break
+            return urljoin(request.host_url, l.id)
         except IntegrityError:
             db.session.rollback()
             if id_type not in ['rand', 'random', 'readable']:
                 return abort(409, "Specified ID already in use")
-
-    return urljoin(request.host_url, l.id)
 
 @app.route('/<link_id>')
 def get_link(link_id):
