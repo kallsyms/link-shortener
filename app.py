@@ -1,4 +1,5 @@
 from flask import Flask, request, abort, render_template_string, redirect
+from netaddr import *
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
 import datetime
@@ -16,6 +17,7 @@ app = Flask(__name__)
 app.config['ENABLE_SUBDOMAINS'] = True
 app.config['BASE_HOSTNAME'] = 'localhost:5000'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+app.config['ADMIN_IPS'] = ip.IPV4_PRIVATE
 
 db = SQLAlchemy(app)
 
@@ -41,8 +43,6 @@ class Link(db.Model):
 # Routes
 @app.route('/new/<id_type>/<path:target_url>')
 def new_link(id_type, target_url):
-    id_type = id_type.lower()
-
     l = Link(target=target_url, creator_ip=request.remote_addr)
 
     # Generate random ids until one with the same name isn't found.
@@ -63,6 +63,18 @@ def new_link(id_type, target_url):
             db.session.rollback()
             if id_type not in ['rand', 'random', 'readable']:
                 return abort(409, "Specified ID already in use")
+
+@app.route('/delete/<link_id>')
+def delete(link_id):
+    if not any(IPAddress(request.remote_addr) in net for net in app.config['ADMIN_IPS']):
+        abort(403)
+
+    l = Link.query.get_or_404(link_id)
+
+    db.session.delete(l)
+    db.session.commit()
+
+    return ''
 
 @app.route('/<link_id>')
 def get_link(link_id):
