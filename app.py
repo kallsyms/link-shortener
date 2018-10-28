@@ -1,6 +1,6 @@
 from flask import Flask, request, abort, render_template_string, redirect
-from netaddr import *
 from flask_sqlalchemy import SQLAlchemy
+from netaddr import IPAddress
 from sqlalchemy.exc import IntegrityError
 import datetime
 import os
@@ -8,16 +8,16 @@ import string
 import random
 try:
     # py3
-    from urllib.parse import urljoin
+    from urllib.parse import urljoin, urlparse
 except ImportError:
     # py2
-    from urlparse import urljoin
+    from urlparse import urljoin, urlparse
 
 app = Flask(__name__)
-app.config['ENABLE_SUBDOMAINS'] = True
-app.config['BASE_HOSTNAME'] = 'localhost:5000'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
-app.config['ADMIN_IPS'] = ip.IPV4_PRIVATE
+app.config.from_object('config.AppConfig')
+
+if type(app.config['ADMIN_IPS']) not in [list, tuple]:
+    app.config['ADMIN_IPS'] = [app.config['ADMIN_IPS']]
 
 db = SQLAlchemy(app)
 
@@ -43,6 +43,9 @@ class Link(db.Model):
 # Routes
 @app.route('/new/<id_type>/<path:target_url>')
 def new_link(id_type, target_url):
+    if urlparse(target_url).netloc == '':
+        target_url = '//' + target_url
+
     l = Link(target=target_url, creator_ip=request.remote_addr)
 
     # Generate random ids until one with the same name isn't found.
@@ -58,7 +61,7 @@ def new_link(id_type, target_url):
         try:
             db.session.add(l)
             db.session.commit()
-            return urljoin(request.host_url, l.id)
+            return urljoin(app.config['SERVER_NAME'], l.id)
         except IntegrityError:
             db.session.rollback()
             if id_type not in ['rand', 'random', 'readable']:
@@ -85,15 +88,30 @@ def get_link(link_id):
 
 @app.route('/')
 def usage():
-    if app.config.get('ENABLE_SUBDOMAINS') and request.host.endswith(app.config['BASE_HOSTNAME']):
-        link_id = request.host[:-len(app.config['BASE_HOSTNAME'])].rstrip('.')
+    if app.config.get('ENABLE_SUBDOMAINS') and request.host.endswith(app.config['SERVER_NAME']):
+        link_id = request.host[:-len(app.config['SERVER_NAME'])].rstrip('.')
         if len(link_id) > 0:
             return get_link(link_id)
 
-    return render_template_string("""Usage: {{ request.host }}/new/{id_type}/{url}
+    return render_template_string("""
+USAGE
+<br/><br/>
 
-id_type is one of rand|random, readable, or a static id.
-url is the target url.
+Create: {{ config.server_name }}/new/{id_type}/{url}
+<br/><br/>
+
+id_type is one of rand|random, readable, or a static id.<br/>
+url is the target url.<br/>
+
+<br/>
+<br/>
+
+
+Delete: {{ config.server_name }}/delete/{id}
+<br/><br/>
+
+id is the name of the short link to be deleted.<br/>
+NOTE: Only the IPs defined in config.admin_ips can delete short links.
 """)
 
 if __name__ == "__main__":
