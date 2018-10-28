@@ -61,7 +61,7 @@ def new_link(id_type, target_url):
         try:
             db.session.add(l)
             db.session.commit()
-            return urljoin(app.config['SERVER_NAME'], l.id)
+            return urljoin('http://' + app.config['SERVER_NAME'], l.id)
         except IntegrityError:
             db.session.rollback()
             if id_type not in ['rand', 'random', 'readable']:
