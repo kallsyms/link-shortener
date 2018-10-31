@@ -41,8 +41,10 @@ class Link(db.Model):
     creator_ip = db.Column(db.String(64), nullable=False)
 
 # Routes
-@app.route('/new/<id_type>/<path:target_url>')
-def new_link(id_type, target_url):
+@app.route('/new/<id_type>')
+def new_link(id_type):
+    target_url = request.args['url']
+
     if urlparse(target_url).netloc == '':
         target_url = '//' + target_url
 
@@ -97,7 +99,7 @@ def usage():
 USAGE
 <br/><br/>
 
-Create: {{ config.server_name }}/new/{id_type}/{url}
+Create: {{ config.server_name }}/new/{id_type}?url={url}
 <br/><br/>
 
 id_type is one of rand|random, readable, or a static id.<br/>
